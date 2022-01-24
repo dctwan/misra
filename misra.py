@@ -3585,6 +3585,32 @@ class MisraChecker:
                     format_size = int(format_size_str[st+1:end])
                 if(format_size == 0 or format_size > bufferSize):
                     self.reportError(token, 30, 3)
+                    
+    def misra_30_4(self, data):
+        for token in data.tokenlist:
+            if token.str == 'memcpy' and isFunctionCall(token.next):
+                name, args = cppcheckdata.get_function_call_name_args(token)
+                if name is None:
+                    continue
+                if token.scope.type != 'If':
+                    self.reportError(token, 30, 4)
+                # get parameter size
+                paraSizes = []
+                values = args[2].values
+                for a in values:
+                    if a.isPossible():
+                        paraSizes.append(int(a.intvalue))
+                # get buffer size
+                bufferSizes = []
+                defBuffer1 = args[0].variable.nameToken
+                defBuffer2 = args[1].variable.nameToken
+                bufferSizes.append(int(defBuffer1.next.next.str))
+                bufferSizes.append(int(defBuffer2.next.next.str))
+                for size in paraSizes:
+                    if size > min(bufferSizes):
+                        self.reportError(token, 30, 4)
+                        break
+                
             
 
 
@@ -4400,6 +4426,7 @@ class MisraChecker:
             self.executeCheck(2210, self.misra_22_10, cfg)
             self.executeCheck(3002, self.misra_30_2, cfg)
             self.executeCheck(3003, self.misra_30_3, cfg)
+            self.executeCheck(3004, self.misra_30_4, cfg)
 
     def analyse_ctu_info(self, ctu_info_files):
         all_typedef_info = []
