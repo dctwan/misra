@@ -1502,6 +1502,8 @@ class MisraChecker:
             if token.str == '[' and token.next.str == ']':
                 self.reportError(token, 30, 1)
 
+
+
     def misra_3_2(self, rawTokens):
         for token in rawTokens:
             if token.str.startswith('//'):
@@ -3125,17 +3127,14 @@ class MisraChecker:
             if token.str != 'free':
                 continue
             else:
-                # free(x);
                 bracket_left = token.next
                 x = bracket_left.next
                 bracket_right = bracket_left.link
-                # 下一条语句 nextNode
                 nextNode = bracket_right.next.next
-                if not nextNode or nextNode.str != x.str:    # nextNode 不存在 或者nextNode不是变量x
+                if not nextNode or nextNode.str != x.str:
                     self.reportError(token, 30, 2)
                 else:
-                    # x = NULL;
-                    assignNode = nextNode.next    # =
+                    assignNode = nextNode.next
                     leftNode = assignNode.astOperand1
                     rightNode = assignNode.astOperand2
                     if leftNode.str == x.str and rightNode.str == 'NULL':
@@ -3505,6 +3504,92 @@ class MisraChecker:
             if isFunctionCall(token) and (token.astOperand1.str in ('malloc', 'calloc', 'realloc', 'free')):
                 self.reportError(token, 21, 3)
 
+
+    # strcpy, strcat, sprintf, vsprintf, gets
+    def misra_31_1(self, data):
+        for token in data.tokenlist:
+            if isFunctionCall(token) and (token.astOperand1.str in ('strcpy', 'strcat', 'sprintf', 'vsprintf', 'gets')):
+                self.reportError(token, 31, 1)
+
+    def misra_31_2(self, data):
+        for token in data.tokenlist:
+            if token.str == '_execl' and isFunctionCall(token.next):
+                name, args = cppcheckdata.get_function_call_name_args(token)
+                param = args[0]
+                # 不是变量名
+                if param.isName == False:
+                    continue 
+                var = param.variable
+                if var.isConst == False:
+                    self.reportError(token, 31, 2)
+
+    def misra_31_3(self, data):
+        for token in data.tokenlist:
+            if token.str == 'vfork' and isFunctionCall(token.next):
+                self.reportError(token, 31, 3)
+
+    def misra_31_4(self, data):
+        for directive in data.directives:
+            res1 = re.search(r'#define ([a-z][a-z0-9_]+)', directive.str)
+            res2 = re.search(r'#undef ([a-z][a-z0-9_]+)', directive.str)
+            if res1 and isStdLibId(res1.group(1), data.standards.c):
+                print(res1.group(1))
+                self.reportError(directive, 31, 4)
+            res2 = re.search(r'#undef ([a-z][a-z0-9_]+)', directive.str)
+            if res2 and isStdLibId(res2.group(1), data.standards.c):
+                print(res2.group(1))
+                self.reportError(directive, 31, 4)
+    
+
+    def misra_31_5(self, data):
+        for directive in data.directives:
+            res1 = re.search(r'#define ([a-z][a-z0-9_]+)', directive.str)
+            res2 = re.search(r'#undef ([a-z][a-z0-9_]+)', directive.str)
+            if res1 and isKeyword(res1.group(1), data.standards.c):
+                print(res1.group(1))
+                self.reportError(directive, 31, 5)
+            res2 = re.search(r'#undef ([a-z][a-z0-9_]+)', directive.str)
+            if res2 and isKeyword(res2.group(1), data.standards.c):
+                print(res2.group(1))
+                self.reportError(directive, 31, 5)
+
+    def misra_33_1(self, data):
+        for token in data.tokenlist:
+            if token.str in ('scanf', 'fscanf', 'sscanf', 'vscanf', 'vsscanf', 'vfscanf'):
+                self.reportError(token, 33, 1)
+
+    def misra_33_2(self, data):
+        for token in data.tokenlist:
+            if token.str in ('access', 'creat', 'pathconf', 'opendir', 'dirname', 'scandir', \
+            'fopen', 'lstat', 'stat', 'open', 'rename', 'remove', 'lexecve', 'execl', 'execlp', \
+            'execle', 'execv', 'execvp', 'freopen', 'mktemp', 'link', 'unlink'):
+                self.reportError(token, 33, 2)
+
+
+    # def misra_21_15(self, data):
+    #     for token in data.tokenlist:
+    #         if token.str not in ('memcpy', 'memmove', 'memcmp'):
+    #             continue
+    #         name, args = cppcheckdata.get_function_call_name_args(token)
+    #         if name is None:
+    #             continue
+    #         if len(args) != 3:
+    #             continue
+    #         if args[0].valueType is None or args[1].valueType is None:
+    #             continue
+    #         if args[0].valueType.type == args[1].valueType.type:
+    #             continue
+    #         if args[0].valueType.type == 'void' or args[1].valueType.type == 'void':
+    #             continue
+    #         self.reportError(token, 21, 15)
+
+    def misra_34_1(self, data):
+        for directive in data.directives:
+            res = re.search(r'#define \w+ [0-9\.]+', directive.str)
+            if res:
+                self.reportError(directive, 34, 1)
+                print(res.group())
+
     def misra_21_4(self, data):
         directive = findInclude(data.directives, '<setjmp.h>')
         if directive:
@@ -3585,7 +3670,24 @@ class MisraChecker:
                     format_size = int(format_size_str[st+1:end])
                 if(format_size == 0 or format_size > bufferSize):
                     self.reportError(token, 30, 3)
-                    
+            
+
+    def misra_30_5(self, data):
+        commandFlag = False
+        validFlag = False
+        for token in data.tokenlist:
+            if not ((token.str == 'system' or token.str == 'exec') and isFunctionCall(token.next)):
+                continue
+            commandFlag = True
+            break
+        for token in data.tokenlist:
+            if token.str == 'validate' and token.function:
+                validFlag = True
+                break
+        if not (commandFlag and validFlag):
+            self.reportError(token, 30, 5)
+        
+
     def misra_30_4(self, data):
         for token in data.tokenlist:
             if token.str == 'memcpy' and isFunctionCall(token.next):
@@ -3610,9 +3712,6 @@ class MisraChecker:
                     if size > min(bufferSizes):
                         self.reportError(token, 30, 4)
                         break
-                
-            
-
 
     def misra_21_14(self, data):
         # buffers used in strcpy/strlen/etc function calls
@@ -4418,7 +4517,6 @@ class MisraChecker:
             self.executeCheck(2119, self.misra_21_19, cfg)
             self.executeCheck(2120, self.misra_21_20, cfg)
             self.executeCheck(2121, self.misra_21_21, cfg)
-            # 22.4 is already covered by Cppcheck writeReadOnlyFile
             self.executeCheck(2205, self.misra_22_5, cfg)
             self.executeCheck(2207, self.misra_22_7, cfg)
             self.executeCheck(2208, self.misra_22_8, cfg)
@@ -4427,6 +4525,16 @@ class MisraChecker:
             self.executeCheck(3002, self.misra_30_2, cfg)
             self.executeCheck(3003, self.misra_30_3, cfg)
             self.executeCheck(3004, self.misra_30_4, cfg)
+            self.executeCheck(3005, self.misra_30_5, cfg)
+            self.executeCheck(3101, self.misra_31_1, cfg)
+            self.executeCheck(3102, self.misra_31_2, cfg)
+            self.executeCheck(3103, self.misra_31_3, cfg)
+            self.executeCheck(3104, self.misra_31_4, cfg)
+            self.executeCheck(3105, self.misra_31_5, cfg)
+            self.executeCheck(3301, self.misra_33_1, cfg)
+            self.executeCheck(3302, self.misra_33_2, cfg)
+            self.executeCheck(3401, self.misra_34_1, cfg)
+            
 
     def analyse_ctu_info(self, ctu_info_files):
         all_typedef_info = []
